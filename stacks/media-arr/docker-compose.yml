@@ -1,0 +1,65 @@
+# Media automation stack (anonymised) — the reverse-proxied pattern.
+# No service publishes a host port. Apps resolve each other by container name on
+# "internal"; the web UIs also join "proxy" so Caddy reaches them by name.
+name: media
+
+x-common: &common
+  restart: unless-stopped
+  environment: &env
+    PUID: 1000
+    PGID: 1000
+    UMASK: "002"
+    TZ: ${TZ:-UTC}
+
+services:
+  sonarr:
+    <<: *common
+    image: ghcr.io/hotio/sonarr:latest
+    container_name: sonarr
+    volumes:
+      - /srv/media/config/sonarr:/config
+      - /srv/media/data:/data
+      - /srv/media/library:/library
+    networks: [internal, proxy]
+
+  radarr:
+    <<: *common
+    image: ghcr.io/hotio/radarr:latest
+    container_name: radarr
+    volumes:
+      - /srv/media/config/radarr:/config
+      - /srv/media/data:/data
+      - /srv/media/library:/library
+    networks: [internal, proxy]
+
+  prowlarr:
+    <<: *common
+    image: ghcr.io/hotio/prowlarr:latest
+    container_name: prowlarr
+    volumes:
+      - /srv/media/config/prowlarr:/config
+    networks: [internal, proxy]
+
+  overseerr:
+    image: lscr.io/linuxserver/overseerr:latest
+    container_name: overseerr
+    restart: unless-stopped
+    environment:
+      PUID: 1000
+      PGID: 1000
+      TZ: ${TZ:-UTC}
+    volumes:
+      - /srv/media/config/overseerr:/config
+    networks: [internal, proxy]
+
+  # Internal-only helper: no proxy network, no host port. Prowlarr calls it by name.
+  flaresolverr:
+    image: ghcr.io/flaresolverr/flaresolverr:latest
+    container_name: flaresolverr
+    restart: unless-stopped
+    networks: [internal]
+
+networks:
+  internal:
+  proxy:
+    external: true

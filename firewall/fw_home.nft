@@ -1,0 +1,46 @@
+#!/usr/sbin/nft -f
+# Host firewall (anonymised). Adds ONE table (inet fw_home); does NOT touch Docker's
+# own ip/ip6 filter+nat tables. Default-deny inbound; trust the LAN (IPv4); block ALL
+# inbound IPv6; keep SSH (v4) + established + ICMP/ICMPv6.
+# Re-running replaces the table atomically.
+#
+# Placeholders: LAN = 192.168.1.0/24, SSH port = 22000. Adjust to your environment.
+
+table inet fw_home {}          # ensure it exists so the delete below never errors
+delete table inet fw_home
+
+table inet fw_home {
+    chain input {
+        type filter hook input priority filter; policy drop;
+
+        iif "lo" accept
+        ct state established,related accept
+        ct state invalid drop
+
+        # ICMP / ICMPv6 (neighbor discovery, PMTU, ping) — REQUIRED or the stack hangs.
+        meta l4proto { icmp, ipv6-icmp } accept
+
+        # IPv6 is not used here. Drop ALL new inbound IPv6 (LAN and Internet alike).
+        # IPv6 stays enabled in the kernel, just firewalled off at the edge, so a
+        # package update or reboot re-enabling it can't silently re-expose anything.
+        meta nfproto ipv6 ct state new drop
+
+        # ---- IPv4 only, below ----
+
+        # DHCP client replies
+        udp sport 67 udp dport 68 accept
+
+        # SSH — hardened (keys only, root off, fail2ban), IPv4 only.
+        meta nfproto ipv4 tcp dport 22000 accept
+
+        # Trust the LAN
+        ip saddr 192.168.1.0/24 accept
+
+        # Trust internal / overlay interfaces (containers -> host)
+        iifname "docker0" accept
+        iifname "br-*" accept
+
+        # Everything else inbound is dropped by policy.
+        limit rate 10/minute burst 5 packets log prefix "fw_home drop: " level info
+    }
+}

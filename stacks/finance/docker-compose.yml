@@ -1,0 +1,52 @@
+# Personal-finance stack (anonymised): Firefly III + internal MariaDB + cron.
+# The web app has NO host port — reached only via Caddy (firefly_core:8080).
+# DB + cron stay on the internal network. Secrets live in ./stack.env (chmod 600,
+# git-ignored); see stack.env.example for the shape.
+name: finance
+
+services:
+  core:
+    image: fireflyiii/core:latest
+    container_name: firefly_core
+    restart: unless-stopped
+    env_file: ./stack.env
+    volumes:
+      - firefly_upload:/var/www/html/storage/upload
+    depends_on: [db]
+    networks:
+      internal:
+        aliases: [app]       # the cron container calls http://app:8080
+      proxy:
+
+  db:
+    image: mariadb:lts
+    container_name: firefly_db
+    restart: unless-stopped
+    env_file: ./stack.env
+    volumes:
+      - firefly_db:/var/lib/mysql
+    networks:
+      internal:
+        aliases: [db]        # core connects with DB_HOST=db
+
+  cron:
+    image: alpine
+    container_name: firefly_cron
+    restart: unless-stopped
+    env_file: ./stack.env
+    command:
+      - sh
+      - -c
+      - |
+        apk add tzdata && echo "0 3 * * * wget -qO- http://app:8080/api/v1/cron/$$STATIC_CRON_TOKEN;echo" | crontab - && crond -f -L /dev/stdout
+    networks:
+      internal:
+
+networks:
+  internal:
+  proxy:
+    external: true
+
+volumes:
+  firefly_db:
+  firefly_upload:

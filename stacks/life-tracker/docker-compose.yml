@@ -1,0 +1,52 @@
+# Life-tracker web app (anonymised) — the Cloudflare-tunnel pattern.
+# Contrast with the Caddy stacks: there is NO inbound port at all, not even 443.
+# cloudflared dials OUT to Cloudflare and serves the app through the tunnel, so the
+# host exposes nothing. The app container is also hardened: read-only rootfs, all
+# Linux capabilities dropped, no privilege escalation, non-root user.
+# Copy .env.example to .env (chmod 600) — compose fills ${VARS} from it.
+name: life-tracker
+
+services:
+  api:
+    image: example/life-tracker:1.0.0
+    container_name: life_tracker_api
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    user: "1000:1000"
+    tmpfs: [/tmp]
+    environment:
+      DATABASE_URL: postgres://tracker:${DB_PASSWORD}@db:5432/tracker
+    depends_on: [db]
+    networks: [internal]
+    # note: NO "ports:" — nothing on the host
+
+  db:
+    image: postgres:16-alpine
+    container_name: life_tracker_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: tracker
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: tracker
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    networks: [internal]
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: life_tracker_tunnel
+    restart: unless-stopped
+    command: ["tunnel", "run"]
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN}
+    depends_on: [api]
+    networks: [internal]
+    # outbound-only: connects to Cloudflare, publishes no host port
+
+networks:
+  internal:
+
+volumes:
+  db_data:

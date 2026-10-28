@@ -1,0 +1,13 @@
+# Never commit real secrets or runtime state
+*.env
+!*.env.example
+.env
+!.env.example
+stack.env
+secrets/
+*.key
+*.pem
+data/
+*_data/
+caddy_data/
+caddy_config/

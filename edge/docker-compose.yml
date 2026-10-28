@@ -1,0 +1,32 @@
+# Edge reverse-proxy (anonymised). The ONLY stack that publishes a host port (:443).
+# Caddy joins the shared external "proxy" network so it can reach every other stack's
+# containers by name. Build uses the Caddy image with the Cloudflare DNS plugin.
+name: edge
+
+services:
+  caddy:
+    image: caddy:2            # build a custom image if you need the cloudflare-dns plugin
+    container_name: caddy_edge
+    restart: unless-stopped
+    ports:
+      - "443:443"
+      - "443:443/udp"          # HTTP/3
+    environment:
+      - CLOUDFLARE_API_TOKEN=${CLOUDFLARE_API_TOKEN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    extra_hosts:
+      - "host.docker.internal:host-gateway"   # reach native host services (e.g. Plex)
+    networks:
+      - default
+      - proxy                  # reach all other stacks by container name
+
+networks:
+  proxy:
+    external: true
+
+volumes:
+  caddy_data:
+  caddy_config:

@@ -1,0 +1,16 @@
+# /etc/systemd/system/fw-home.service
+# Loads the fw_home nftables table at boot, after Docker, without flushing Docker's rules.
+[Unit]
+Description=fw_home host firewall (adds inet fw_home table; does not touch Docker)
+After=network-online.target docker.service nftables.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/sbin/nft -f /etc/nftables.d/fw-home.nft
+ExecReload=/usr/sbin/nft -f /etc/nftables.d/fw-home.nft
+ExecStop=/usr/sbin/nft delete table inet fw_home
+
+[Install]
+WantedBy=multi-user.target

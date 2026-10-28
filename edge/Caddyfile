@@ -1,0 +1,39 @@
+# Caddy edge reverse-proxy (anonymised).
+# Wildcard TLS via Cloudflare DNS-01 (no inbound ACME needed).
+# Backends are reached by CONTAINER NAME over the shared "proxy" network — none of them
+# publish a host port. Admin UIs are gated to LAN + WireGuard source ranges.
+
+*.home.example {
+    tls {
+        dns cloudflare {env.CLOUDFLARE_API_TOKEN}
+    }
+
+    route {
+        # ---------- PUBLIC (app provides its own auth) ----------
+        @requests host requests.home.example
+        handle @requests { reverse_proxy overseerr:5055 }
+
+        # Plex runs natively on the host; proxied to it so its own port stays LAN-only.
+        @plex host plex.home.example
+        handle @plex {
+            reverse_proxy https://host.docker.internal:32400 {
+                transport http { tls_insecure_skip_verify }
+            }
+        }
+
+        # ---------- GATE: everything below = LAN + WireGuard only ----------
+        @outside not remote_ip 192.168.1.0/24 10.100.0.0/24
+        abort @outside
+
+        # ---------- Admin / media (all on the internal proxy network) ----------
+        @grafana   host grafana.home.example   { reverse_proxy grafana:3000 }
+        @sonarr    host sonarr.home.example     { reverse_proxy sonarr:8989 }
+        @radarr    host radarr.home.example     { reverse_proxy radarr:7878 }
+        @prowlarr  host prowlarr.home.example   { reverse_proxy prowlarr:9696 }
+        @firefly   host firefly.home.example    { reverse_proxy firefly_core:8080 }
+        @status    host status.home.example     { reverse_proxy uptime-kuma:3001 }
+
+        # ---------- Anything else: refuse ----------
+        handle { abort }
+    }
+}
