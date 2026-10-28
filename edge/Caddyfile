@@ -26,12 +26,18 @@
         abort @outside
 
         # ---------- Admin / media (all on the internal proxy network) ----------
-        @grafana   host grafana.home.example   { reverse_proxy grafana:3000 }
-        @sonarr    host sonarr.home.example     { reverse_proxy sonarr:8989 }
-        @radarr    host radarr.home.example     { reverse_proxy radarr:7878 }
-        @prowlarr  host prowlarr.home.example   { reverse_proxy prowlarr:9696 }
-        @firefly   host firefly.home.example    { reverse_proxy firefly_core:8080 }
-        @status    host status.home.example     { reverse_proxy uptime-kuma:3001 }
+        @grafana host grafana.home.example
+        handle @grafana { reverse_proxy grafana:3000 }
+        @sonarr host sonarr.home.example
+        handle @sonarr { reverse_proxy sonarr:8989 }
+        @radarr host radarr.home.example
+        handle @radarr { reverse_proxy radarr:7878 }
+        @prowlarr host prowlarr.home.example
+        handle @prowlarr { reverse_proxy prowlarr:9696 }
+        @firefly host firefly.home.example
+        handle @firefly { reverse_proxy firefly_core:8080 }
+        @status host status.home.example
+        handle @status { reverse_proxy uptime-kuma:3001 }
 
         # ---------- Anything else: refuse ----------
         handle { abort }
