@@ -14,8 +14,7 @@ services:
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
-    extra_hosts:
-      - "host.docker.internal:host-gateway" # node-exporter runs on the host network
+    extra_hosts: ["host.docker.internal:host-gateway"]   # reach host-networked node-exporter
     networks: [internal]
 
   grafana:
