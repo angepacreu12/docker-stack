@@ -4,7 +4,8 @@
 # inbound IPv6; keep SSH (v4) + established + ICMP/ICMPv6.
 # Re-running replaces the table atomically.
 #
-# Placeholders: LAN = 192.168.1.0/24, SSH port = 22000. Adjust to your environment.
+# Placeholders: LAN = 192.168.1.0/24, VPN clients = 192.0.2.0/24, SSH port = 22000.
+# Adjust to your environment.
 
 table inet fw_home {}          # ensure it exists so the delete below never errors
 delete table inet fw_home
@@ -35,6 +36,10 @@ table inet fw_home {
 
         # Trust the LAN
         ip saddr 192.168.1.0/24 accept
+
+        # Trust VPN clients: WireGuard ends on the router and they arrive un-NATed,
+        # from their own range, so the LAN rule above doesn't cover them.
+        ip saddr 192.0.2.0/24 accept
 
         # Trust internal / overlay interfaces (containers -> host)
         iifname "docker0" accept

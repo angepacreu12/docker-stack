@@ -4,8 +4,8 @@ How I took my homelab from "most of the stack reachable over the internet" to "o
 port exposed, everything else private." Written before → after, with how I verified each
 change.
 
-> Anonymised throughout. Values like `home.example`, `192.168.1.0/24` and `2001:db8::/64`
-> are placeholders.
+> Anonymised throughout. Values like `home.example`, `192.168.1.0/24`, `192.0.2.0/24` and
+> `2001:db8::/64` are placeholders.
 
 ---
 
@@ -99,6 +99,31 @@ removed the management GUI (keeping its data volume). The host is now managed wi
 **Verified:** all migrated stacks healthy; data preserved by reusing the original named
 volumes; GUI container removed and its proxied route dropped.
 
+### 6. After the firewall — two VPN problems
+
+Both showed up the day after the hardening, and both came from the VPN clients having
+their own range: WireGuard ends on the ISP router, so they reach the host un-NATed.
+
+**Blocked by my own firewall.** The rule trusting the LAN didn't cover the VPN range, so
+clients lost host-native services such as DNS and Plex. Fixed with an explicit rule for
+that range in `fw_home`.
+
+**The tunnel connected, then nothing loaded.** Docker auto-assigned a `/20` to a new
+compose network, and that `/20` contained the VPN client range. Clients' SYNs arrived, but
+the host routed its SYN-ACKs into the Docker bridge instead of back to them. `tcpdump`
+showed the packets arriving, and `ip route get <client>` showed the wrong route. Fixed by
+pinning that network's subnet in compose:
+
+```yaml
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+```
+
+**Verified:** VPN clients reach the host services again and pages load through the tunnel.
+
 ---
 
 ## Before → after
@@ -118,6 +143,8 @@ volumes; GUI container removed and its proxied route dropped.
 - Verify backups are immutable / offline (ransomware resistance).
 - Pin container image tags instead of `:latest`.
 - Optional: filter inbound IPv6 at the router too, for defence in depth.
+- Set `default-address-pools` in Docker's `daemon.json`, so every network stays inside one
+  block and can't overlap a VPN or LAN range again.
 
 ## Takeaways
 
@@ -126,4 +153,6 @@ volumes; GUI container removed and its proxied route dropped.
   an exposed one — so I now bind deliberately, or don't publish at all and proxy by name.
 - A host firewall belongs in front of Docker regardless — as the backstop that catches the
   next mistake, not the primary control.
+- Docker's automatic subnets are a routing decision. If one overlaps a remote range, the
+  tunnel still comes up and the replies quietly go to the wrong place.
 - Reusing named volumes made even stateful migrations (databases) safe and reversible.
